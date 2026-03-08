@@ -218,6 +218,29 @@ class OpenIDConnectPlugin(BasePlugin):
                 }
             )
 
+    def _is_google_provider(self) -> bool:
+        """Detect Google as the OIDC provider from configured URLs."""
+        urls_to_check = [
+            self.config.authorization_url or "",
+            self.config.json_web_key_set_url or "",
+            self.config.token_url or "",
+        ]
+        google_domains = ["accounts.google.com", "googleapis.com"]
+        return any(
+            domain in url for url in urls_to_check for domain in google_domains
+        )
+
+    def _is_cognito_provider(self) -> bool:
+        """Detect AWS Cognito as the OIDC provider from the JWKS URL.
+
+        Cognito JWKS URLs follow the pattern:
+        https://cognito-idp.<Region>.amazonaws.com/<userPoolId>/.well-known/jwks.json
+        """
+        return bool(
+            self.config.json_web_key_set_url
+            and "cognito-idp." in self.config.json_web_key_set_url
+        )
+
     def _get_oauth_session(self):
         scope = "openid profile email"
         if self.config.use_scope_permissions:
@@ -227,14 +250,14 @@ class OpenIDConnectPlugin(BasePlugin):
             scope += f" {scope_permissions}"
         if self.config.enable_refresh_token and (
             self.config.json_web_key_set_url
-            and "cognito-idp." not in self.config.json_web_key_set_url
+            and not self._is_cognito_provider()
+            and not self._is_google_provider()
         ):
-            # AWS Cognito does not support this scope, refresh tokens are issued out of
-            # the box.
-            # Cognito detection method is rather crude, according to the documentation
-            # JWKS (which is required for the correct configuration of the plugin) is placed under following address:
-            # https://cognito-idp.<Region>.amazonaws.com/<userPoolId>/.well-known/jwks.json.
-
+            # AWS Cognito does not support this scope, refresh tokens are issued
+            # out of the box.
+            # Google uses `access_type=offline` as an authorization parameter
+            # instead of the `offline_access` scope. The parameter is added in
+            # `external_authentication_url`.
             scope += " offline_access"
         return OAuth2Client(
             client_id=self.config.client_id,
@@ -374,6 +397,11 @@ class OpenIDConnectPlugin(BasePlugin):
         }
         if self.config.audience:
             kwargs["audience"] = self.config.audience
+        if self.config.enable_refresh_token and self._is_google_provider():
+            # Google does not support the standard `offline_access` scope.
+            # Instead, it requires `access_type=offline` as a query parameter
+            # on the authorization URL to issue refresh tokens.
+            kwargs["access_type"] = "offline"
         uri, state = self.oauth.create_authorization_url(
             self.config.authorization_url, **kwargs
         )
