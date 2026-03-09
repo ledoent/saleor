@@ -1,0 +1,54 @@
+name: Build and Push to GAR
+
+on:
+  push:
+    branches: ["3.22-*"]
+    tags: ["3.22.*"]
+  workflow_dispatch:
+
+env:
+  GAR_REGION: europe-west3
+  GAR_REPO: europe-west3-docker.pkg.dev/kendall-ledo/docker
+  IMAGE_NAME: saleor-api
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for GAR
+        run: gcloud auth configure-docker ${{ env.GAR_REGION }}-docker.pkg.dev --quiet
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            BRANCH=${GITHUB_REF#refs/heads/}
+            echo "tag=${BRANCH}" >> $GITHUB_OUTPUT
+          fi
+          echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.GAR_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+            ${{ env.GAR_REPO }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
