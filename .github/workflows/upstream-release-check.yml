@@ -42,13 +42,14 @@ jobs:
         if: steps.check.outputs.has_update == 'true'
         uses: dawidd6/action-send-mail@v3
         with:
-          server_address: smtp.gmail.com
+          server_address: email-smtp.us-east-1.amazonaws.com
           server_port: 587
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
+          secure: true
+          username: ${{ secrets.SES_SMTP_USERNAME }}
+          password: ${{ secrets.SES_SMTP_PASSWORD }}
           subject: "Saleor upstream update: ${{ steps.check.outputs.newest_3_22 }} available (we're on ${{ steps.check.outputs.our_base }})"
           to: dkendall@ledoweb.com
-          from: "Saleor Fork Bot <${{ secrets.SMTP_USERNAME }}>"
+          from: "Saleor Fork Bot <noreply@ledoweb.com>"
           body: |
             A newer Saleor 3.22.x release is available upstream.
 
