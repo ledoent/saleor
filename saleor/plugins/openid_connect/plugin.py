@@ -220,14 +220,18 @@ class OpenIDConnectPlugin(BasePlugin):
 
     def _is_google_provider(self) -> bool:
         """Detect Google as the OIDC provider from configured URLs."""
+        from urllib.parse import urlparse
+
         urls_to_check = [
             self.config.authorization_url or "",
             self.config.json_web_key_set_url or "",
             self.config.token_url or "",
         ]
-        google_domains = ["accounts.google.com", "googleapis.com"]
+        google_domains = {"accounts.google.com", "googleapis.com", "www.googleapis.com"}
         return any(
-            domain in url for url in urls_to_check for domain in google_domains
+            urlparse(url).hostname in google_domains
+            for url in urls_to_check
+            if url
         )
 
     def _is_cognito_provider(self) -> bool:

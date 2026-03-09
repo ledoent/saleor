@@ -88,6 +88,28 @@ def test_google_auth_url_includes_access_type_offline(openid_plugin, settings, r
     assert "offline_access" not in plugin._get_oauth_session().scope
 
 
+def test_google_auth_url_without_refresh_token_does_not_include_access_type(
+    openid_plugin, settings, rf
+):
+    """When refresh tokens are disabled, Google auth URL should NOT include
+    `access_type=offline`, even when the provider is Google."""
+    settings.ALLOWED_CLIENT_HOSTS = ["*"]
+    plugin = openid_plugin(
+        enable_refresh_token=False,
+        oauth_authorization_url="https://accounts.google.com/o/oauth2/v2/auth",
+        oauth_token_url="https://oauth2.googleapis.com/token",
+        json_web_key_set_url="https://www.googleapis.com/oauth2/v3/certs",
+        client_id="test_client",
+    )
+    redirect_uri = "http://localhost:3000/oauth-callback/"
+    input = {"redirectUri": redirect_uri}
+    response = plugin.external_authentication_url(input, rf.request(), None)
+    auth_url = response.get("authorizationUrl")
+    parsed_qs = parse_qs(urlparse(auth_url).query)
+    assert "access_type" not in parsed_qs
+    assert "offline_access" not in plugin._get_oauth_session().scope
+
+
 def test_non_google_auth_url_does_not_include_access_type(openid_plugin, settings, rf):
     """Non-Google providers should not get `access_type=offline` in the auth URL."""
     settings.ALLOWED_CLIENT_HOSTS = ["*"]
